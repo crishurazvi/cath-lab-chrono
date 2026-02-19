@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>CathLab - Dashboard Superviseur</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col p-6">
+
+    <header class="flex justify-between items-center mb-6 shrink-0">
+        <div>
+            <h1 class="text-4xl font-extrabold tracking-tight">Superviseur <span class="text-[var(--accent)]">CathLab</span></h1>
+            <p class="text-[var(--muted)]">Suivi en temps réel de la procédure</p>
+        </div>
+        <div class="flex gap-4">
+            <button onclick="exportJSON()" class="pill hover:bg-[rgba(255,255,255,0.1)] cursor-pointer">⬇ Exporter JSON</button>
+            <button onclick="clearServerHistory()" class="pill text-red-400 border-red-500/30 hover:bg-red-900/30 cursor-pointer">Effacer Historique</button>
+        </div>
+    </header>
+
+    <!-- LIVE BANNER -->
+    <div id="live-banner" class="glass-card mb-6 shrink-0 flex items-center justify-between p-6 border-l-8 border-[var(--stroke)] transition-all duration-300">
+        <div class="flex items-center gap-6">
+            <div id="live-indicator" class="w-6 h-6 rounded-full bg-slate-600"></div>
+            <div>
+                <h2 id="live-status" class="text-2xl font-bold uppercase tracking-widest text-[var(--muted)]">EN ATTENTE</h2>
+                <p id="live-context" class="text-xl font-medium mt-1">Aucune inflation en cours</p>
+            </div>
+        </div>
+        <div id="live-timer" class="font-mono text-7xl font-black text-[var(--muted)]">00.00</div>
+    </div>
+
+    <!-- MAIN TABLE -->
+    <div class="glass-card flex-1 min-h-0 flex flex-col p-2">
+        <div class="flex-1 overflow-y-auto rounded-xl">
+            <table class="w-full text-left">
+                <thead class="sticky top-0 bg-[#0f141e] z-10 shadow-md">
+                    <tr>
+                        <th class="text-lg py-4">Heure</th>
+                        <th class="text-lg py-4">Artère traitée</th>
+                        <th class="text-lg py-4">Dispositif</th>
+                        <th class="text-lg py-4">Durée Inflation</th>
+                        <th class="text-lg py-4">Pression Max</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <!-- JS INJECT -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let stateData = { events: [] };
+        let dashTimerInterval = null;
+
+        const dom = {
+            banner: document.getElementById('live-banner'),
+            indicator: document.getElementById('live-indicator'),
+            status: document.getElementById('live-status'),
+            context: document.getElementById('live-context'),
+            timer: document.getElementById('live-timer'),
+            histBody: document.getElementById('history-body')
+        };
+
+        socket.on('sync_state', (state) => {
+            stateData = state;
+            renderTable();
+            // In case page reloaded while timer is running
+            if (state.liveTimer && state.liveTimer.isRunning) {
+                startDashboardTimer(state.liveTimer);
+            }
+        });
+
+        socket.on('timer_started', (data) => startDashboardTimer(data));
+        
+        socket.on('timer_stopped', () => {
+            clearInterval(dashTimerInterval);
+            dom.banner.className = "glass-card mb-6 shrink-0 flex items-center justify-between p-6 border-l-8 border-[var(--stroke)] transition-all duration-300";
+            dom.indicator.className = "w-6 h-6 rounded-full bg-slate-600";
+            dom.status.innerText = "EN ATTENTE";
+            dom.status.className = "text-2xl font-bold uppercase tracking-widest text-[var(--muted)]";
+            dom.context.innerText = "Calcul et attente de pression...";
+            dom.timer.className = "font-mono text-7xl font-black text-[var(--muted)]";
+        });
+
+        function startDashboardTimer(data) {
+            dom.banner.className = "glass-card mb-6 shrink-0 flex items-center justify-between p-6 border-l-8 border-[var(--bad)] bg-red-900/10 transition-all duration-300";
+            dom.indicator.className = "live-pulse";
+            dom.status.innerText = "INFLATION EN COURS";
+            dom.status.className = "text-2xl font-bold uppercase tracking-widest text-[var(--bad)]";
+            dom.context.innerText = `${data.artery} — ${data.device}`;
+            dom.timer.className = "font-mono text-7xl font-black text-[var(--bad)]";
+
+            clearInterval(dashTimerInterval);
+            dashTimerInterval = setInterval(() => {
+                let elapsed = (Date.now() - data.startTime) / 1000;
+                dom.timer.innerText = elapsed.toFixed(2).padStart(5, '0');
+            }, 30); // 30ms e suficient pentru visualizare smooth pe dashboard
+        }
+
+        function renderTable() {
+            dom.histBody.innerHTML = '';
+            if(stateData.events.length === 0) {
+                dom.histBody.innerHTML = '<tr><td colspan="5" class="text-center py-10 text-[var(--muted)]">Aucune donnée disponible</td></tr>';
+                return;
+            }
+            stateData.events.forEach(e => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="font-mono text-slate-400">${e.start_clock}</td>
+                    <td class="font-bold text-white text-xl">${e.artery}</td>
+                    <td class="text-slate-300">${e.device}</td>
+                    <td class="font-mono font-bold text-[var(--accent)] text-2xl">${e.duration_s}s</td>
+                    <td class="font-black text-[var(--good)] text-3xl">${e.pressure_atm} <span class="text-sm font-normal text-[var(--muted)]">atm</span></td>
+                `;
+                dom.histBody.appendChild(tr);
+            });
+        }
+
+        function clearServerHistory() {
+            if(confirm("Action irréversible. Effacer tout l'historique sur le serveur ?")) {
+                socket.emit('clear_history');
+            }
+        }
+
+        function exportJSON() {
+            const blob = new Blob([JSON.stringify(stateData, null, 2)], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `cathlab_export_${new Date().toISOString().substring(0,10)}.json`;
+            a.click();
+        }
+    </script>
+</body>
+</html>
