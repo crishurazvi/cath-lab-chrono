@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CathLab - Terminal Salle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Socket.io injectat de Node -->
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col p-4">
+
+    <!-- HEADER (Fixed) -->
+    <header class="h-16 shrink-0 flex justify-between items-center mb-4">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+                CathLab <span class="text-[var(--accent)]">Terminal</span>
+                <span id="conn-status" class="pill text-xs bg-green-900/50 border-green-500/50 text-green-400">En ligne</span>
+            </h1>
+        </div>
+        <div class="text-right">
+            <div id="sys-clock" class="text-2xl font-black font-mono tracking-wider">--:--:--</div>
+        </div>
+    </header>
+
+    <!-- MAIN GRID (No scroll on page) -->
+    <main class="flex-1 min-h-0 grid grid-cols-2 gap-6">
+        
+        <!-- COLONNE GAUCHE (Setup + Timer) -->
+        <div class="glass-card flex flex-col p-5 h-full relative">
+            
+            <div class="flex gap-4 mb-4 shrink-0">
+                <!-- Artère -->
+                <div class="flex-1 glass-card-inner p-4">
+                    <label class="block text-xs uppercase text-[var(--muted)] mb-2 font-bold">Artère traitée</label>
+                    <select id="select-artery" onchange="updateContext()">
+                        <option>IVA (LAD)</option><option>ACx (LCx)</option><option>CD (RCA)</option>
+                        <option>TC (LM)</option><option>DIAG (D)</option><option>Marginale (OM)</option>
+                    </select>
+                </div>
+                <!-- Dispositif -->
+                <div class="flex-1 glass-card-inner p-4">
+                    <label class="block text-xs uppercase text-[var(--muted)] mb-2 font-bold">Dispositif (Mémoire)</label>
+                    <select id="select-saved-device" onchange="updateContext()"></select>
+                </div>
+            </div>
+
+            <!-- Ajouter Nouveau (Shrink 0) -->
+            <div class="glass-card-inner p-4 shrink-0 flex items-end gap-2 mb-4">
+                <div class="w-1/4">
+                    <label class="block text-xs text-[var(--muted)] mb-1">Type</label>
+                    <select id="new-type" class="text-sm h-10 min-h-0"><option>Ballon</option><option>Stent</option></select>
+                </div>
+                <div class="w-1/4">
+                    <label class="block text-xs text-[var(--muted)] mb-1">Ø (mm)</label>
+                    <input type="number" id="new-diam" step="0.25" value="3.00" class="text-sm text-center h-10 min-h-0">
+                </div>
+                <div class="w-1/4">
+                    <label class="block text-xs text-[var(--muted)] mb-1">Long (mm)</label>
+                    <input type="number" id="new-len" step="1" value="15" class="text-sm text-center h-10 min-h-0">
+                </div>
+                <button onclick="saveNewDevice()" class="w-1/4 h-10 bg-[rgba(255,255,255,0.1)] rounded-xl font-bold border border-[var(--stroke)] text-sm active:scale-95 transition-all">
+                    + Ajouter
+                </button>
+            </div>
+
+            <!-- CHRONO ZONE (Flex-grow ca sa umple spatiul) -->
+            <div class="mt-auto flex-1 border-t border-[var(--stroke)] pt-4 flex flex-col justify-end items-center">
+                <div id="timer-display" class="font-mono text-[7rem] 2xl:text-[8rem] font-black leading-none mb-4 tracking-tighter">00.00</div>
+                <button id="btn-action" onclick="toggleTimer()" class="btn-start w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center">
+                    DÉMARRER
+                </button>
+            </div>
+
+        </div>
+
+        <!-- COLONNE DROITE (Pression & Historique) -->
+        <div class="flex flex-col gap-6 h-full min-h-0 relative">
+            
+            <!-- POPUP PRESSION (Absolute peste coloana dreapta) -->
+            <div id="section-pressure" class="absolute inset-0 z-50 glass-card border-2 border-[var(--accent)] bg-[#0b0f17]/95 backdrop-blur-xl flex flex-col p-8 hidden shadow-[0_0_50px_rgba(124,92,255,0.3)]">
+                <h2 class="text-4xl font-black text-white mb-2">ASPIRÉ !</h2>
+                <p class="text-[var(--muted)] text-lg mb-8">Veuillez saisir la pression atteinte :</p>
+                
+                <div class="flex-1 flex flex-col justify-center">
+                    <div class="flex items-end gap-4 mb-10">
+                        <input type="number" id="input-pressure" step="0.5" class="flex-1 text-center font-black text-7xl h-[120px] text-[var(--good)]" placeholder="0">
+                        <span class="text-3xl font-bold text-[var(--muted)] pb-6">ATM</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6">
+                        <button onclick="confirmPressure()" class="bg-[var(--good)] text-black font-black text-3xl rounded-[22px] h-[100px] active:scale-95 transition-all shadow-xl shadow-green-900/50">OK</button>
+                        <button onclick="cancelPressure()" class="bg-transparent border-2 border-[var(--stroke)] text-white font-bold text-2xl rounded-[22px] h-[100px] active:scale-95 transition-all">Annuler</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORIQUE SCROLLABLE -->
+            <div class="glass-card flex-1 flex flex-col p-5 min-h-0">
+                <div class="flex justify-between items-center mb-4 shrink-0">
+                    <h2 class="text-xl font-bold">Historique Session</h2>
+                    <span class="text-xs text-[var(--muted)]">Synchronisé en temps réel</span>
+                </div>
+
+                <!-- Zona care face scroll DOAR pe interior -->
+                <div class="flex-1 overflow-y-auto pr-2 rounded-xl bg-[rgba(0,0,0,0.2)] border border-[var(--stroke)]">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 backdrop-blur-md bg-[rgba(11,15,23,0.8)] z-10">
+                            <tr>
+                                <th>Heure</th>
+                                <th>Durée</th>
+                                <th>Press.</th>
+                                <th>Artère/Dispositif</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body">
+                            <!-- JS Inject -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        const socket = io();
+
+        let localTimer = null;
+        let isRunning = false;
+        let t0 = null;
+        let currentStartClock = "";
+        let pendingEvent = {};
+
+        const dom = {
+            clock: document.getElementById('sys-clock'),
+            selArtery: document.getElementById('select-artery'),
+            selDevice: document.getElementById('select-saved-device'),
+            timeDisplay: document.getElementById('timer-display'),
+            btnAction: document.getElementById('btn-action'),
+            secPressure: document.getElementById('section-pressure'),
+            histBody: document.getElementById('history-body'),
+            connStatus: document.getElementById('conn-status')
+        };
+
+        // Ceas local
+        setInterval(() => dom.clock.innerText = new Date().toLocaleTimeString('fr-FR', { hour12: false }), 1000);
+
+        // Connexion Socket
+        socket.on('connect', () => {
+            dom.connStatus.innerText = "En ligne";
+            dom.connStatus.className = "pill text-xs bg-green-900/50 border-green-500/50 text-green-400";
+        });
+        socket.on('disconnect', () => {
+            dom.connStatus.innerText = "Hors ligne";
+            dom.connStatus.className = "pill text-xs bg-red-900/50 border-red-500/50 text-red-400 live-pulse";
+        });
+
+        // Sincronizare State
+        socket.on('sync_state', (state) => {
+            // Update devices
+            dom.selDevice.innerHTML = state.devices.length ? '' : '<option disabled selected>Aucun</option>';
+            state.devices.forEach(d => {
+                let opt = document.createElement('option');
+                let label = `${d.type} ${d.diameter} × ${d.length} mm`;
+                opt.value = label; opt.innerText = label;
+                dom.selDevice.appendChild(opt);
+            });
+
+            // Update istoric
+            dom.histBody.innerHTML = '';
+            if(state.events.length === 0) {
+                dom.histBody.innerHTML = '<tr><td colspan="4" class="text-center text-sm py-8 text-[var(--muted)]">Historique vide</td></tr>';
+            } else {
+                state.events.forEach(e => {
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="font-mono text-sm">${e.start_clock}</td>
+                        <td class="font-mono font-bold text-[var(--accent)] text-lg">${e.duration_s}s</td>
+                        <td class="font-bold text-[var(--good)] text-xl">${e.pressure_atm} <span class="text-xs">atm</span></td>
+                        <td class="text-sm"><b>${e.artery}</b><br><span class="text-[var(--muted)]">${e.device}</span></td>
+                    `;
+                    dom.histBody.appendChild(tr);
+                });
+            }
+        });
+
+        function saveNewDevice() {
+            let type = document.getElementById('new-type').value;
+            let diam = parseFloat(document.getElementById('new-diam').value).toFixed(2);
+            let len = document.getElementById('new-len').value;
+            socket.emit('add_device', { type, diameter: diam, length: len });
+        }
+
+        function updateDisplay() {
+            let elapsed = (Date.now() - t0) / 1000;
+            dom.timeDisplay.innerText = elapsed.toFixed(2).padStart(5, '0');
+        }
+
+        function toggleTimer() {
+            if (dom.selDevice.value === "Aucun") return alert("Ajoutez un dispositif d'abord.");
+
+            if (!isRunning) {
+                // START
+                isRunning = true;
+                t0 = Date.now();
+                currentStartClock = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+                
+                socket.emit('start_timer', { 
+                    startTime: t0, 
+                    artery: dom.selArtery.value, 
+                    device: dom.selDevice.value 
+                });
+
+                localTimer = setInterval(updateDisplay, 10);
+                dom.btnAction.innerText = "STOP / ASPIRATION";
+                dom.btnAction.className = "btn-stop w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+            } else {
+                // STOP
+                isRunning = false;
+                clearInterval(localTimer);
+                socket.emit('stop_timer');
+                
+                dom.btnAction.innerHTML = "DÉMARRER";
+                dom.btnAction.className = "btn-start w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+
+                pendingEvent = {
+                    datetime: new Date().toISOString(),
+                    start_clock: currentStartClock,
+                    duration_s: ((Date.now() - t0)/1000).toFixed(2),
+                    artery: dom.selArtery.value,
+                    device: dom.selDevice.value
+                };
+
+                // Show Popup presiune
+                document.getElementById('input-pressure').value = '';
+                dom.secPressure.classList.remove('hidden');
+                setTimeout(() => document.getElementById('input-pressure').focus(), 100);
+            }
+        }
+
+        function confirmPressure() {
+            let pVal = document.getElementById('input-pressure').value;
+            if (pVal === "") return;
+            
+            pendingEvent.pressure_atm = parseFloat(pVal).toFixed(1);
+            socket.emit('save_event', pendingEvent);
+            
+            dom.secPressure.classList.add('hidden');
+            dom.timeDisplay.innerText = "00.00";
+        }
+
+        function cancelPressure() {
+            dom.secPressure.classList.add('hidden');
+            dom.timeDisplay.innerText = "00.00";
+        }
+    </script>
+</body>
+</html>
