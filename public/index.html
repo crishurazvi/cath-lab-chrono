@@ -3,142 +3,299 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CathLab - Terminal Salle</title>
+    <title>Chrono Pression | Cathlab Live</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <!-- Socket.io injectat de Node -->
+    
+    <!-- Socket.io & jsPDF pour l'export -->
     <script src="/socket.io/socket.io.js"></script>
-</head>
-<body class="h-screen w-screen overflow-hidden flex flex-col p-4">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- HEADER (Fixed) -->
-    <header class="h-16 shrink-0 flex justify-between items-center mb-4">
-        <div>
-            <h1 class="text-3xl font-extrabold tracking-tight flex items-center gap-3">
-                CathLab <span class="text-[var(--accent)]">Terminal</span>
-                <span id="conn-status" class="pill text-xs bg-green-900/50 border-green-500/50 text-green-400">En ligne</span>
-            </h1>
+    <style>
+        :root {
+            --bg: #0b0f17;
+            --card: rgba(255, 255, 255, 0.06);
+            --card2: rgba(255, 255, 255, 0.08);
+            --stroke: rgba(255, 255, 255, 0.12);
+            --txt: rgba(255, 255, 255, 0.92);
+            --muted: rgba(255, 255, 255, 0.62);
+            --accent: #7c5cff;
+            --good: #27d3a2;
+            --bad: #ff4d6d;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(1200px 600px at 20% 0%, rgba(124, 92, 255, 0.22), transparent 50%),
+                radial-gradient(1000px 600px at 90% 10%, rgba(39, 211, 162, 0.16), transparent 55%);
+            background-attachment: fixed;
+            color: var(--txt);
+            touch-action: pan-y;
+            user-select: none;
+            overflow: hidden; /* Fără scroll pe body */
+        }
+
+        .font-mono { font-family: 'Roboto Mono', monospace; }
+
+        .glass-card {
+            background: var(--card);
+            border: 1px solid var(--stroke);
+            border-radius: 22px;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+            backdrop-filter: blur(12px);
+        }
+
+        .glass-card-inner {
+            background: var(--card2);
+            border: 1px solid var(--stroke);
+            border-radius: 18px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--stroke);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        input, select {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid var(--stroke) !important;
+            color: var(--txt) !important;
+            border-radius: 16px;
+            min-height: 54px;
+            font-size: 18px !important;
+            padding: 0 16px;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        input:focus, select:focus { border-color: var(--accent) !important; }
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+        option { background: var(--bg); color: white; }
+
+        .btn-start {
+            background: linear-gradient(135deg, rgba(124,92,255,1), rgba(39,211,162,0.85));
+            color: #0b0f17;
+            box-shadow: 0 8px 32px rgba(124,92,255,0.4);
+        }
+        
+        .btn-stop {
+            background: linear-gradient(135deg, rgba(255,77,109,1), rgba(124,92,255,0.95));
+            color: #0b0f17;
+            box-shadow: 0 8px 32px rgba(255,77,109,0.4);
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,77,109,0.7); }
+            70% { transform: scale(1.02); box-shadow: 0 0 0 20px rgba(255,77,109,0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,77,109,0); }
+        }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
+        th { background: rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.1); padding: 12px; text-align: left; font-size: 14px; color: var(--muted); }
+        td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px 12px; font-size: 16px; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col p-4 md:p-6">
+
+    <!-- HEADER -->
+    <header class="flex justify-between items-center mb-6 max-w-7xl mx-auto w-full shrink-0">
+        <div class="flex items-center gap-4">
+            <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">Chrono Pression</h1>
+            <span id="conn-status" class="pill bg-yellow-900/50 text-yellow-500 border-yellow-500/50">Connexion...</span>
         </div>
-        <div class="text-right">
-            <div id="sys-clock" class="text-2xl font-black font-mono tracking-wider">--:--:--</div>
+        <div class="text-right hidden sm:block">
+            <div id="sys-clock" class="text-3xl font-black font-mono tracking-wider">--:--:--</div>
         </div>
     </header>
 
-    <!-- MAIN GRID (No scroll on page) -->
-    <main class="flex-1 min-h-0 grid grid-cols-2 gap-6">
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto w-full min-h-0">
         
-        <!-- COLONNE GAUCHE (Setup + Timer) -->
-        <div class="glass-card flex flex-col p-5 h-full relative">
+        <!-- COLONNE GAUCHE : SETUP + TIMER -->
+        <div class="space-y-4 flex flex-col h-full">
             
-            <div class="flex gap-4 mb-4 shrink-0">
-                <!-- Artère -->
-                <div class="flex-1 glass-card-inner p-4">
-                    <label class="block text-xs uppercase text-[var(--muted)] mb-2 font-bold">Artère traitée</label>
-                    <select id="select-artery" onchange="updateContext()">
-                        <option>IVA (LAD)</option><option>ACx (LCx)</option><option>CD (RCA)</option>
-                        <option>TC (LM)</option><option>DIAG (D)</option><option>Marginale (OM)</option>
-                    </select>
+            <div class="glass-card p-5 flex-1 flex flex-col relative overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    
+                    <!-- Bloc Préparation -->
+                    <div class="glass-card-inner p-4">
+                        <div class="mb-3">
+                            <label class="block text-sm font-bold text-[var(--muted)] mb-1">Artère</label>
+                            <select id="select-artery" onchange="updateContextDisplay()">
+                                <option>IVA (LAD)</option><option>ACx (LCx)</option><option>CD (RCA)</option>
+                                <option>TC (LM)</option><option>DIAG (D)</option><option>Marginale (OM)</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="block text-sm font-bold text-[var(--muted)] mb-1">Mémoire Dispositifs</label>
+                            <select id="select-saved-device" onchange="updateContextDisplay()"></select>
+                        </div>
+
+                        <div class="pt-3 border-t border-[var(--stroke)]">
+                            <span class="text-xs text-[var(--muted)] mb-2 block">Nouveau dispositif</span>
+                            <div class="grid grid-cols-3 gap-2 mb-2">
+                                <select id="new-type" class="text-sm px-2"><option>Ballon</option><option>Stent</option></select>
+                                <input type="number" id="new-diam" step="0.25" value="3.00" class="text-sm text-center px-2">
+                                <input type="number" id="new-len" step="1" value="15" class="text-sm text-center px-2">
+                            </div>
+                            <button onclick="saveNewDevice()" class="w-full bg-[rgba(255,255,255,0.1)] py-2 rounded-xl font-bold active:scale-95 text-sm border border-[var(--stroke)]">
+                                + Ajouter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bloc Contexte -->
+                    <div class="glass-card-inner p-4 flex flex-col justify-center">
+                        <div class="mb-4">
+                            <span class="pill mb-1">Artère Active</span>
+                            <div id="display-artery" class="text-2xl font-black text-white">IVA (LAD)</div>
+                        </div>
+                        <div>
+                            <span class="pill mb-1">Dispositif Actif</span>
+                            <div id="display-device" class="text-xl font-black text-[var(--good)] leading-tight">--</div>
+                        </div>
+                    </div>
                 </div>
-                <!-- Dispositif -->
-                <div class="flex-1 glass-card-inner p-4">
-                    <label class="block text-xs uppercase text-[var(--muted)] mb-2 font-bold">Dispositif (Mémoire)</label>
-                    <select id="select-saved-device" onchange="updateContext()"></select>
+
+                <!-- TIMER ZONE -->
+                <div class="mt-auto border-t border-[var(--stroke)] pt-4 flex flex-col items-center justify-end">
+                    <div id="timer-display" class="font-mono text-[6rem] xl:text-[7.5rem] font-black leading-none mb-4 tracking-tighter">00.00</div>
+                    <button id="btn-action" onclick="toggleTimer()" class="btn-start w-full h-[100px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center">
+                        DÉMARRER
+                    </button>
                 </div>
             </div>
-
-            <!-- Ajouter Nouveau (Shrink 0) -->
-            <div class="glass-card-inner p-4 shrink-0 flex items-end gap-2 mb-4">
-                <div class="w-1/4">
-                    <label class="block text-xs text-[var(--muted)] mb-1">Type</label>
-                    <select id="new-type" class="text-sm h-10 min-h-0"><option>Ballon</option><option>Stent</option></select>
-                </div>
-                <div class="w-1/4">
-                    <label class="block text-xs text-[var(--muted)] mb-1">Ø (mm)</label>
-                    <input type="number" id="new-diam" step="0.25" value="3.00" class="text-sm text-center h-10 min-h-0">
-                </div>
-                <div class="w-1/4">
-                    <label class="block text-xs text-[var(--muted)] mb-1">Long (mm)</label>
-                    <input type="number" id="new-len" step="1" value="15" class="text-sm text-center h-10 min-h-0">
-                </div>
-                <button onclick="saveNewDevice()" class="w-1/4 h-10 bg-[rgba(255,255,255,0.1)] rounded-xl font-bold border border-[var(--stroke)] text-sm active:scale-95 transition-all">
-                    + Ajouter
-                </button>
-            </div>
-
-            <!-- CHRONO ZONE (Flex-grow ca sa umple spatiul) -->
-            <div class="mt-auto flex-1 border-t border-[var(--stroke)] pt-4 flex flex-col justify-end items-center">
-                <div id="timer-display" class="font-mono text-[7rem] 2xl:text-[8rem] font-black leading-none mb-4 tracking-tighter">00.00</div>
-                <button id="btn-action" onclick="toggleTimer()" class="btn-start w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center">
-                    DÉMARRER
-                </button>
-            </div>
-
         </div>
 
-        <!-- COLONNE DROITE (Pression & Historique) -->
-        <div class="flex flex-col gap-6 h-full min-h-0 relative">
+        <!-- COLONNE DROITE : PRESSION + HISTORIQUE -->
+        <div class="space-y-4 flex flex-col h-full relative min-h-0">
             
             <!-- POPUP PRESSION (Absolute peste coloana dreapta) -->
-            <div id="section-pressure" class="absolute inset-0 z-50 glass-card border-2 border-[var(--accent)] bg-[#0b0f17]/95 backdrop-blur-xl flex flex-col p-8 hidden shadow-[0_0_50px_rgba(124,92,255,0.3)]">
-                <h2 class="text-4xl font-black text-white mb-2">ASPIRÉ !</h2>
-                <p class="text-[var(--muted)] text-lg mb-8">Veuillez saisir la pression atteinte :</p>
-                
+            <div id="section-pressure" class="absolute inset-0 z-40 glass-card bg-[#0b0f17]/95 backdrop-blur-xl border-2 border-[var(--accent)] hidden flex-col p-6 shadow-[0_0_40px_rgba(124,92,255,0.3)]">
+                <h2 class="text-3xl font-bold text-white mb-2">Saisie pression</h2>
+                <div class="glass-card-inner p-4 mb-4 text-sm text-[var(--muted)] grid grid-cols-2 gap-2">
+                    <div>Dispositif: <b id="pend-device" class="text-white"></b></div>
+                    <div>Artère: <b id="pend-artery" class="text-white"></b></div>
+                    <div>Durée: <b id="pend-dur" class="text-[var(--accent)] font-bold text-lg"></b></div>
+                </div>
                 <div class="flex-1 flex flex-col justify-center">
-                    <div class="flex items-end gap-4 mb-10">
-                        <input type="number" id="input-pressure" step="0.5" class="flex-1 text-center font-black text-7xl h-[120px] text-[var(--good)]" placeholder="0">
-                        <span class="text-3xl font-bold text-[var(--muted)] pb-6">ATM</span>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-6">
-                        <button onclick="confirmPressure()" class="bg-[var(--good)] text-black font-black text-3xl rounded-[22px] h-[100px] active:scale-95 transition-all shadow-xl shadow-green-900/50">OK</button>
-                        <button onclick="cancelPressure()" class="bg-transparent border-2 border-[var(--stroke)] text-white font-bold text-2xl rounded-[22px] h-[100px] active:scale-95 transition-all">Annuler</button>
+                    <label class="block text-sm font-bold text-[var(--muted)] mb-2">Pression (atm)</label>
+                    <input type="number" id="input-pressure" step="0.5" class="text-center font-bold text-6xl h-[100px] mb-6 text-[var(--good)]" placeholder="12">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <button onclick="confirmPressure()" class="bg-[var(--good)] text-black font-black text-2xl rounded-xl h-[80px] active:scale-95 transition-all">OK</button>
+                        <button onclick="cancelPressure()" class="bg-transparent border border-[var(--stroke)] text-white font-bold text-xl rounded-xl h-[80px] active:scale-95 transition-all">Annuler</button>
                     </div>
                 </div>
             </div>
 
-            <!-- HISTORIQUE SCROLLABLE -->
-            <div class="glass-card flex-1 flex flex-col p-5 min-h-0">
+            <!-- SECTION HISTORIQUE SCROLLABLE -->
+            <div class="glass-card p-5 flex-1 flex flex-col min-h-0">
                 <div class="flex justify-between items-center mb-4 shrink-0">
-                    <h2 class="text-xl font-bold">Historique Session</h2>
-                    <span class="text-xs text-[var(--muted)]">Synchronisé en temps réel</span>
+                    <h2 class="text-xl font-bold">Historique Live</h2>
+                    <span class="text-xs text-[var(--muted)]">Sincronizat pe server</span>
                 </div>
 
-                <!-- Zona care face scroll DOAR pe interior -->
-                <div class="flex-1 overflow-y-auto pr-2 rounded-xl bg-[rgba(0,0,0,0.2)] border border-[var(--stroke)]">
+                <div class="flex-1 overflow-y-auto bg-[rgba(0,0,0,0.2)] rounded-xl border border-[var(--stroke)] mb-4">
                     <table class="w-full text-left">
-                        <thead class="sticky top-0 backdrop-blur-md bg-[rgba(11,15,23,0.8)] z-10">
+                        <thead class="sticky top-0 backdrop-blur-md bg-[rgba(11,15,23,0.9)] z-10">
                             <tr>
                                 <th>Heure</th>
                                 <th>Durée</th>
                                 <th>Press.</th>
-                                <th>Artère/Dispositif</th>
+                                <th>Détails</th>
                             </tr>
                         </thead>
                         <tbody id="history-body">
-                            <!-- JS Inject -->
+                            <!-- JS injects here -->
                         </tbody>
                     </table>
+                </div>
+
+                <!-- BOUTONS D'ACTION BAS -->
+                <div class="grid grid-cols-3 gap-3 shrink-0">
+                    <button onclick="clearHistory()" class="bg-transparent border border-[var(--stroke)] text-sm rounded-xl py-3 hover:text-[var(--bad)] transition-colors">Effacer Tout</button>
+                    <button onclick="exportPDF()" class="bg-[rgba(255,255,255,0.05)] border border-[var(--stroke)] text-sm rounded-xl py-3 text-[var(--accent)] font-bold hover:bg-[rgba(255,255,255,0.1)]">PDF / Export</button>
+                    <button onclick="openFinalModal()" class="bg-[var(--accent)] text-white font-bold text-sm rounded-xl py-3 active:scale-95 shadow-lg shadow-[#7c5cff]/30">Clôturer Procédure</button>
                 </div>
             </div>
 
         </div>
-
     </main>
 
+    <!-- MODAL BILAN FIN DE PROCEDURE -->
+    <div id="modal-final" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-2xl p-8 border-[var(--good)] shadow-[0_0_50px_rgba(39,211,162,0.2)]">
+            <h2 class="text-3xl font-black mb-6 text-white border-b border-[var(--stroke)] pb-4">Bilan Fin de Procédure</h2>
+            
+            <div class="grid grid-cols-2 gap-6 mb-8">
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">DAP (Gy·cm²)</label>
+                    <input type="number" id="fin-dap" step="0.1" placeholder="Ex: 45.2">
+                </div>
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">Air Kerma / AK (mGy)</label>
+                    <input type="number" id="fin-ak" step="1" placeholder="Ex: 850">
+                </div>
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">Temps de scopie (min)</label>
+                    <input type="number" id="fin-scopie" step="0.1" placeholder="Ex: 12.5">
+                </div>
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">Iode / Contraste (ml)</label>
+                    <input type="number" id="fin-iode" step="1" placeholder="Ex: 150">
+                </div>
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">Dernière TA (mmHg)</label>
+                    <input type="text" id="fin-ta" placeholder="Ex: 120/80">
+                </div>
+                <div>
+                    <label class="block text-sm text-[var(--muted)] mb-1">Heure pose TR Band</label>
+                    <input type="time" id="fin-trband">
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="saveFinalMetrics()" class="flex-1 bg-[var(--good)] text-black font-black text-xl rounded-xl py-4 active:scale-95">Sauvegarder Bilan</button>
+                <button onclick="closeFinalModal()" class="flex-1 bg-transparent border border-[var(--stroke)] text-white font-bold text-xl rounded-xl py-4 hover:bg-white/5">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
     <script>
         const socket = io();
 
-        let localTimer = null;
+        // Starea Globala venita de la server
+        let globalState = { devices: [], events: [], finalMetrics: null };
+        
+        let localTimerInterval = null;
         let isRunning = false;
-        let t0 = null;
-        let currentStartClock = "";
+        let t0 = 0;
         let pendingEvent = {};
 
         const dom = {
             clock: document.getElementById('sys-clock'),
             selArtery: document.getElementById('select-artery'),
             selDevice: document.getElementById('select-saved-device'),
+            dispArtery: document.getElementById('display-artery'),
+            dispDevice: document.getElementById('display-device'),
             timeDisplay: document.getElementById('timer-display'),
             btnAction: document.getElementById('btn-action'),
             secPressure: document.getElementById('section-pressure'),
@@ -146,116 +303,274 @@
             connStatus: document.getElementById('conn-status')
         };
 
-        // Ceas local
+        // Ceas local sistem
         setInterval(() => dom.clock.innerText = new Date().toLocaleTimeString('fr-FR', { hour12: false }), 1000);
 
-        // Connexion Socket
+        // -- SOCKET EVENTS --
         socket.on('connect', () => {
-            dom.connStatus.innerText = "En ligne";
-            dom.connStatus.className = "pill text-xs bg-green-900/50 border-green-500/50 text-green-400";
+            dom.connStatus.innerText = "Connecté (Live)";
+            dom.connStatus.className = "pill bg-green-900/50 text-green-400 border-green-500/50";
         });
         socket.on('disconnect', () => {
             dom.connStatus.innerText = "Hors ligne";
-            dom.connStatus.className = "pill text-xs bg-red-900/50 border-red-500/50 text-red-400 live-pulse";
+            dom.connStatus.className = "pill bg-red-900/50 text-red-400 border-red-500/50";
         });
 
-        // Sincronizare State
         socket.on('sync_state', (state) => {
-            // Update devices
-            dom.selDevice.innerHTML = state.devices.length ? '' : '<option disabled selected>Aucun</option>';
-            state.devices.forEach(d => {
-                let opt = document.createElement('option');
-                let label = `${d.type} ${d.diameter} × ${d.length} mm`;
-                opt.value = label; opt.innerText = label;
-                dom.selDevice.appendChild(opt);
-            });
-
-            // Update istoric
-            dom.histBody.innerHTML = '';
-            if(state.events.length === 0) {
-                dom.histBody.innerHTML = '<tr><td colspan="4" class="text-center text-sm py-8 text-[var(--muted)]">Historique vide</td></tr>';
-            } else {
-                state.events.forEach(e => {
-                    let tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td class="font-mono text-sm">${e.start_clock}</td>
-                        <td class="font-mono font-bold text-[var(--accent)] text-lg">${e.duration_s}s</td>
-                        <td class="font-bold text-[var(--good)] text-xl">${e.pressure_atm} <span class="text-xs">atm</span></td>
-                        <td class="text-sm"><b>${e.artery}</b><br><span class="text-[var(--muted)]">${e.device}</span></td>
-                    `;
-                    dom.histBody.appendChild(tr);
-                });
+            globalState = state;
+            renderDevicesDrop();
+            renderHistory();
+            
+            // Daca intra cineva cand timerul merge deja
+            if (state.liveTimer && state.liveTimer.isRunning && !isRunning) {
+                startLocalTimer(state.liveTimer.startTime);
             }
         });
+
+        socket.on('timer_started', (data) => {
+            if (!isRunning) startLocalTimer(data.startTime);
+        });
+
+        socket.on('timer_stopped', () => {
+            if (isRunning) stopLocalTimerOnlyUI();
+        });
+
+        // -- LOGICA PREPARARE --
+        function updateContextDisplay() {
+            dom.dispArtery.innerText = dom.selArtery.value;
+            dom.dispDevice.innerText = dom.selDevice.value || "-- Aucun --";
+        }
+
+        function renderDevicesDrop() {
+            const currentVal = dom.selDevice.value;
+            dom.selDevice.innerHTML = '';
+            if (globalState.devices.length === 0) {
+                dom.selDevice.innerHTML = '<option disabled selected>Aucun dispositif</option>';
+            } else {
+                globalState.devices.forEach(d => {
+                    let opt = document.createElement('option');
+                    let label = `${d.type} ${d.diameter} × ${d.length} mm`;
+                    opt.value = label; opt.innerText = label;
+                    dom.selDevice.appendChild(opt);
+                });
+            }
+            if(currentVal && Array.from(dom.selDevice.options).some(o => o.value === currentVal)) {
+                dom.selDevice.value = currentVal;
+            }
+            updateContextDisplay();
+        }
 
         function saveNewDevice() {
             let type = document.getElementById('new-type').value;
             let diam = parseFloat(document.getElementById('new-diam').value).toFixed(2);
             let len = document.getElementById('new-len').value;
-            socket.emit('add_device', { type, diameter: diam, length: len });
+            let label = `${type} ${diam} × ${len} mm`;
+
+            if (!globalState.devices.some(d => `${d.type} ${d.diameter} × ${d.length} mm` === label)) {
+                socket.emit('add_device', { type, diameter: diam, length: len });
+                setTimeout(() => { dom.selDevice.value = label; updateContextDisplay(); }, 200);
+            }
         }
 
+        // -- LOGICA TIMER --
         function updateDisplay() {
             let elapsed = (Date.now() - t0) / 1000;
             dom.timeDisplay.innerText = elapsed.toFixed(2).padStart(5, '0');
         }
 
+        function startLocalTimer(startTime) {
+            isRunning = true;
+            t0 = startTime;
+            localTimerInterval = setInterval(updateDisplay, 10);
+            
+            dom.btnAction.innerText = "STOP";
+            dom.btnAction.className = "btn-stop w-full h-[100px] rounded-[22px] text-5xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+        }
+
+        function stopLocalTimerOnlyUI() {
+            isRunning = false;
+            clearInterval(localTimerInterval);
+            dom.btnAction.innerHTML = "DÉMARRER";
+            dom.btnAction.className = "btn-start w-full h-[100px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+        }
+
         function toggleTimer() {
-            if (dom.selDevice.value === "Aucun") return alert("Ajoutez un dispositif d'abord.");
+            if (!dom.selDevice.value || dom.selDevice.value === "Aucun dispositif") {
+                return alert("Veuillez d'abord ajouter un dispositif.");
+            }
 
             if (!isRunning) {
-                // START
-                isRunning = true;
-                t0 = Date.now();
-                currentStartClock = new Date().toLocaleTimeString('fr-FR', { hour12: false });
-                
+                // Initiator START
+                let startTime = Date.now();
                 socket.emit('start_timer', { 
-                    startTime: t0, 
+                    startTime: startTime, 
                     artery: dom.selArtery.value, 
                     device: dom.selDevice.value 
                 });
-
-                localTimer = setInterval(updateDisplay, 10);
-                dom.btnAction.innerText = "STOP / ASPIRATION";
-                dom.btnAction.className = "btn-stop w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+                startLocalTimer(startTime);
+                pendingEvent.start_clock = new Date().toLocaleTimeString('fr-FR', { hour12: false });
             } else {
-                // STOP
-                isRunning = false;
-                clearInterval(localTimer);
+                // Initiator STOP
                 socket.emit('stop_timer');
-                
-                dom.btnAction.innerHTML = "DÉMARRER";
-                dom.btnAction.className = "btn-start w-full h-[120px] rounded-[22px] text-4xl font-black transition-all active:scale-[0.98] flex items-center justify-center";
+                stopLocalTimerOnlyUI();
 
-                pendingEvent = {
-                    datetime: new Date().toISOString(),
-                    start_clock: currentStartClock,
-                    duration_s: ((Date.now() - t0)/1000).toFixed(2),
-                    artery: dom.selArtery.value,
-                    device: dom.selDevice.value
-                };
+                pendingEvent.datetime = new Date().toISOString();
+                pendingEvent.duration_s = ((Date.now() - t0)/1000).toFixed(2);
+                pendingEvent.artery = dom.selArtery.value;
+                pendingEvent.device = dom.selDevice.value;
 
-                // Show Popup presiune
-                document.getElementById('input-pressure').value = '';
-                dom.secPressure.classList.remove('hidden');
-                setTimeout(() => document.getElementById('input-pressure').focus(), 100);
+                showPressureForm();
             }
+        }
+
+        // -- LOGICA PRESSION --
+        function showPressureForm() {
+            document.getElementById('pend-device').innerText = pendingEvent.device;
+            document.getElementById('pend-artery').innerText = pendingEvent.artery;
+            document.getElementById('pend-dur').innerText = pendingEvent.duration_s + " s";
+            
+            document.getElementById('input-pressure').value = '';
+            dom.secPressure.classList.remove('hidden');
+            dom.secPressure.classList.add('flex');
+            setTimeout(() => document.getElementById('input-pressure').focus(), 100);
         }
 
         function confirmPressure() {
             let pVal = document.getElementById('input-pressure').value;
-            if (pVal === "") return;
+            if (pVal === "") return alert("Saisissez la pression.");
             
             pendingEvent.pressure_atm = parseFloat(pVal).toFixed(1);
             socket.emit('save_event', pendingEvent);
             
             dom.secPressure.classList.add('hidden');
+            dom.secPressure.classList.remove('flex');
             dom.timeDisplay.innerText = "00.00";
+            pendingEvent = {};
         }
 
         function cancelPressure() {
             dom.secPressure.classList.add('hidden');
+            dom.secPressure.classList.remove('flex');
             dom.timeDisplay.innerText = "00.00";
+            pendingEvent = {};
+        }
+
+        // -- HISTORIQUE & BILAN FINAL --
+        function renderHistory() {
+            dom.histBody.innerHTML = '';
+            if(globalState.events.length === 0) {
+                dom.histBody.innerHTML = '<tr><td colspan="4" class="text-center text-[var(--muted)] py-6">Aucun enregistrement</td></tr>';
+                return;
+            }
+
+            globalState.events.forEach(e => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="font-mono text-sm">${e.start_clock}</td>
+                    <td class="font-mono font-bold text-[var(--accent)] text-lg">${e.duration_s}s</td>
+                    <td class="font-bold text-[var(--good)] text-xl">${e.pressure_atm} <span class="text-xs">atm</span></td>
+                    <td class="text-sm"><b>${e.artery}</b><br><span class="text-[var(--muted)] text-xs">${e.device}</span></td>
+                `;
+                dom.histBody.appendChild(tr);
+            });
+        }
+
+        function clearHistory() {
+            if(confirm("Êtes-vous sûr de vouloir effacer tout l'historique sur TOUS les écrans ?")) {
+                socket.emit('clear_history');
+            }
+        }
+
+        // -- MODAL FIN PROCEDURE --
+        function openFinalModal() {
+            document.getElementById('modal-final').classList.remove('hidden');
+            // Daca existau deja date salvate, le punem in inputuri
+            if(globalState.finalMetrics) {
+                document.getElementById('fin-dap').value = globalState.finalMetrics.dap || '';
+                document.getElementById('fin-ak').value = globalState.finalMetrics.ak || '';
+                document.getElementById('fin-scopie').value = globalState.finalMetrics.scopie || '';
+                document.getElementById('fin-iode').value = globalState.finalMetrics.iode || '';
+                document.getElementById('fin-ta').value = globalState.finalMetrics.ta || '';
+                document.getElementById('fin-trband').value = globalState.finalMetrics.trband || '';
+            }
+        }
+
+        function closeFinalModal() {
+            document.getElementById('modal-final').classList.add('hidden');
+        }
+
+        function saveFinalMetrics() {
+            const metrics = {
+                dap: document.getElementById('fin-dap').value,
+                ak: document.getElementById('fin-ak').value,
+                scopie: document.getElementById('fin-scopie').value,
+                iode: document.getElementById('fin-iode').value,
+                ta: document.getElementById('fin-ta').value,
+                trband: document.getElementById('fin-trband').value,
+                timestamp: new Date().toLocaleTimeString('fr-FR', { hour12: false })
+            };
+            socket.emit('save_final_metrics', metrics);
+            closeFinalModal();
+            alert("Bilan de fin de procédure sauvegardé avec succès !");
+        }
+
+        // -- EXPORT PDF --
+        function exportPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const dateStr = new Date().toLocaleDateString('fr-FR');
+            
+            // Header
+            doc.setFontSize(20);
+            doc.text("Rapport de Procedure - CathLab", 14, 20);
+            doc.setFontSize(10);
+            doc.text(`Date d'export : ${dateStr} à ${new Date().toLocaleTimeString('fr-FR')}`, 14, 28);
+
+            // History Table
+            const tableData = globalState.events.map(e => [
+                e.start_clock,
+                e.duration_s + " s",
+                e.pressure_atm + " atm",
+                e.artery,
+                e.device
+            ]);
+
+            doc.autoTable({
+                startY: 35,
+                head: [['Heure', 'Duree', 'Pression', 'Artere', 'Dispositif']],
+                body: tableData,
+                theme: 'grid',
+                headStyles: { fillColor: [124, 92, 255] }
+            });
+
+            // Final Metrics Section
+            if (globalState.finalMetrics) {
+                let finalY = doc.lastAutoTable.finalY + 15;
+                doc.setFontSize(14);
+                doc.setTextColor(39, 211, 162); // Greenish
+                doc.text("Bilan de Fin de Procedure", 14, finalY);
+                
+                doc.setFontSize(11);
+                doc.setTextColor(0, 0, 0);
+                const m = globalState.finalMetrics;
+                const metricsText = [
+                    `DAP : ${m.dap || '-'} Gy·cm2`,
+                    `Air Kerma (AK) : ${m.ak || '-'} mGy`,
+                    `Temps de scopie : ${m.scopie || '-'} min`,
+                    `Volume Iode (Contraste) : ${m.iode || '-'} ml`,
+                    `Derniere TA : ${m.ta || '-'} mmHg`,
+                    `Heure pose TR Band : ${m.trband || '-'}`
+                ];
+                
+                finalY += 8;
+                metricsText.forEach(line => {
+                    doc.text(line, 14, finalY);
+                    finalY += 6;
+                });
+            }
+
+            // Save PDF
+            doc.save(`CathLab_Report_${new Date().toISOString().slice(0,10)}.pdf`);
         }
     </script>
 </body>
