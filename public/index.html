@@ -36,7 +36,6 @@
             color: var(--txt);
             touch-action: pan-y;
             user-select: none;
-            overflow: hidden; /* Fără scroll pe body */
         }
 
         .font-mono { font-family: 'Roboto Mono', monospace; }
@@ -110,7 +109,7 @@
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
     </style>
 </head>
-<body class="h-screen flex flex-col p-4 md:p-6">
+<body class="min-h-screen flex flex-col p-4 md:p-6">
 
     <!-- HEADER -->
     <header class="flex justify-between items-center mb-6 max-w-7xl mx-auto w-full shrink-0">
@@ -124,7 +123,7 @@
     </header>
 
     <!-- MAIN CONTENT -->
-    <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto w-full min-h-0">
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto w-full">
         
         <!-- COLONNE GAUCHE : SETUP + TIMER -->
         <div class="space-y-4 flex flex-col h-full">
