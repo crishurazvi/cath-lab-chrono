@@ -1,0 +1,108 @@
+:root {
+    --bg: #0b0f17;
+    --card: rgba(255, 255, 255, 0.06);
+    --card2: rgba(255, 255, 255, 0.08);
+    --stroke: rgba(255, 255, 255, 0.12);
+    --txt: rgba(255, 255, 255, 0.92);
+    --muted: rgba(255, 255, 255, 0.62);
+    --accent: #7c5cff;
+    --good: #27d3a2;
+    --bad: #ff4d6d;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg);
+    background-image: 
+        radial-gradient(1200px 600px at 20% 0%, rgba(124, 92, 255, 0.22), transparent 50%),
+        radial-gradient(1000px 600px at 90% 10%, rgba(39, 211, 162, 0.16), transparent 55%);
+    background-attachment: fixed;
+    color: var(--txt);
+    touch-action: pan-y;
+    user-select: none;
+}
+
+.font-mono { font-family: 'Roboto Mono', monospace; }
+
+.glass-card {
+    background: var(--card);
+    border: 1px solid var(--stroke);
+    border-radius: 22px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+    backdrop-filter: blur(12px);
+}
+
+.glass-card-inner {
+    background: var(--card2);
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
+}
+
+.pill {
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--stroke);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--muted);
+    font-size: 13px;
+    align-items: center;
+    gap: 8px;
+}
+
+input, select {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid var(--stroke) !important;
+    color: var(--txt) !important;
+    border-radius: 16px;
+    min-height: 54px;
+    font-size: 18px !important;
+    padding: 0 16px;
+    width: 100%;
+    outline: none;
+}
+input:focus, select:focus { border-color: var(--accent) !important; }
+option { background: var(--bg); color: white; }
+
+/* Ascunde sagetile din input number */
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.btn-start {
+    background: linear-gradient(135deg, rgba(124,92,255,1), rgba(39,211,162,0.85));
+    color: #0b0f17;
+    box-shadow: 0 8px 32px rgba(124,92,255,0.4);
+}
+
+.btn-stop {
+    background: linear-gradient(135deg, rgba(255,77,109,1), rgba(124,92,255,0.95));
+    color: #0b0f17;
+    box-shadow: 0 8px 32px rgba(255,77,109,0.4);
+    animation: pulse-border 1.5s infinite;
+}
+
+.live-pulse {
+    width: 12px; height: 12px;
+    background-color: var(--bad);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--bad);
+    animation: blink 1s infinite;
+}
+
+@keyframes pulse-border {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,77,109,0.7); }
+    70% { transform: scale(1.02); box-shadow: 0 0 0 20px rgba(255,77,109,0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,77,109,0); }
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+table { width: 100%; border-collapse: separate; border-spacing: 0; }
+th { background: rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.1); padding: 12px; text-align: left; font-size: 14px; color: var(--muted); }
+td { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 16px 12px; font-size: 16px; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
